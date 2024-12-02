@@ -27,8 +27,13 @@ job_id=2023
 
 # The aishell dataset location, please change this to your own path
 # make sure of using absolute path. DO-NOT-USE relatvie path!
-data=/export/data/asr-data/OpenSLR/33/
+# data=/export/data/asr-data/OpenSLR/33/
+data=/cache/asr/dataset/aishell
 data_url=www.openslr.org/resources/33
+# https://www.openslr.org/resources/33/data_aishell.tgz
+# https://us.openslr.org/resources/33/data_aishell.tgz
+# https://openslr.elda.org/resources/33/data_aishell.tgz
+# https://openslr.magicdatatech.com/resources/33/data_aishell.tgz
 
 nj=16
 dict=data/dict/lang_char.txt

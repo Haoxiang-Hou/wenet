@@ -1,23 +1,24 @@
 #!/bin/bash
 
 # Copyright 2019 Mobvoi Inc. All Rights Reserved.
-
 . ./path.sh || exit 1;
 
-# Automatically detect number of gpus
-if command -v nvidia-smi &> /dev/null; then
-  num_gpus=$(nvidia-smi -L | wc -l)
-  gpu_list=$(seq -s, 0 $((num_gpus-1)))
+# Automatically detect number of npus
+if command -v npu-smi info &> /dev/null; then
+  num_npus=$(npu-smi info -l | grep "Total Count" | awk '{print $4}')
+  npu_list=$(seq -s, 0 $((num_npus-1)))
 else
-  num_gpus=-1
-  gpu_list="-1"
+  num_npus=-1
+  npu_list="-1"
 fi
-# You can also manually specify CUDA_VISIBLE_DEVICES
-# if you don't want to utilize all available GPU resources.
-export CUDA_VISIBLE_DEVICES="${gpu_list}"
-echo "CUDA_VISIBLE_DEVICES is ${CUDA_VISIBLE_DEVICES}"
-stage=0 # start from 0 if you need to start from data preparation
-stop_stage=5
+
+# You can also manually specify ASCEND_RT_VISIBLE_DEVICES
+# if you don't want to utilize all available NPU resources.
+export ASCEND_RT_VISIBLE_DEVICES="${npu_list}"
+echo "ASCEND_RT_VISIBLE_DEVICES is ${ASCEND_RT_VISIBLE_DEVICES}"
+
+stage=4 # start from 0 if you need to start from data preparation
+stop_stage=4
 
 # You should change the following two parameters for multiple machine training,
 # see https://pytorch.org/docs/stable/elastic/run.html
@@ -62,7 +63,8 @@ train_set=train_960
 dev_set=dev
 recog_set="test_clean test_other dev_clean dev_other"
 
-train_engine=torch_ddp
+# specify your distributed training method among ['torch_ddp', 'torch_fsdp', 'deepspeed']
+train_engine=torch_fsdp
 
 deepspeed_config=../../aishell/s0/conf/ds_stage2.json
 deepspeed_save_states="model_only"
@@ -144,21 +146,31 @@ fi
 if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
   # Training
   mkdir -p $dir
-  num_gpus=$(echo $CUDA_VISIBLE_DEVICES | awk -F "," '{print NF}')
-  # Use "nccl" if it works, otherwise use "gloo"
-  dist_backend="nccl"
-  # train.py will write $train_config to $dir/train.yaml with model input
-  # and output dimension, train.yaml will be used for inference or model
-  # export later
-  if [ ${train_engine} == "deepspeed" ]; then
-    echo "$0: using deepspeed"
-  else
-    echo "$0: using torch ddp"
-  fi
-  echo "$0: num_nodes is $num_nodes, proc_per_node is $num_gpus"
-  torchrun --nnodes=$num_nodes --nproc_per_node=$num_gpus --rdzv_endpoint=$HOST_NODE_ADDR \
-           --rdzv_id=$job_id --rdzv_backend="c10d" \
+  num_npus=$(echo $ASCEND_RT_VISIBLE_DEVICES | awk -F "," '{print NF}')
+  # Use "hccl" for npu if it works, otherwise use "gloo"
+  # NOTE(xcsong): deepspeed fails with gloo, see
+  #   https://github.com/microsoft/DeepSpeed/issues/2818
+  dist_backend="hccl"
+
+  # train.py rewrite $train_config to $dir/train.yaml with model input
+  # and output dimension, and $dir/train.yaml will be used for inference
+  # and export.
+  echo "$0: using ${train_engine}"
+
+  # NOTE(xcsong): Both ddp & deepspeed can be launched by torchrun
+  # NOTE(xcsong): To unify single-node & multi-node training, we add
+  #               all related args. You should change `nnodes` &
+  #               `rdzv_endpoint` for multi-node, see
+  #               https://pytorch.org/docs/stable/elastic/run.html#usage
+  #               https://github.com/wenet-e2e/wenet/pull/2055#issuecomment-1766055406
+  #               `rdzv_id` - A user-defined id that uniquely identifies the worker group for a job.
+  #                           This id is used by each node to join as a member of a particular worker group.
+  #               `rdzv_endpoint` - The rendezvous backend endpoint; usually in form <host>:<port>.
+  echo "$0: num_nodes is $num_nodes, proc_per_node is $num_npus"
+  torchrun --nnodes=$num_nodes --nproc_per_node=$num_npus \
+  --rdzv_id=$job_id --rdzv_backend="c10d" --rdzv_endpoint=$HOST_NODE_ADDR \
     wenet/bin/train.py \
+      --device "npu" \
       --train_engine ${train_engine} \
       --config $train_config \
       --data_type ${data_type} \
@@ -193,7 +205,8 @@ if [ ${stage} -le 5 ] && [ ${stop_stage} -ge 5 ]; then
   ctc_weight=0.5
   for test in $recog_set; do
     result_dir=$dir/${test}
-    python wenet/bin/recognize.py --gpu 0 \
+    python wenet/bin/recognize.py \
+      --device "npu" \
       --modes $decode_modes \
       --config $dir/train.yaml \
       --data_type raw \
