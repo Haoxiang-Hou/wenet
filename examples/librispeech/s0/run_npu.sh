@@ -14,7 +14,8 @@ fi
 
 # You can also manually specify ASCEND_RT_VISIBLE_DEVICES
 # if you don't want to utilize all available NPU resources.
-export ASCEND_RT_VISIBLE_DEVICES="${npu_list}"
+# export ASCEND_RT_VISIBLE_DEVICES="${npu_list}"
+export ASCEND_RT_VISIBLE_DEVICES="7"
 echo "ASCEND_RT_VISIBLE_DEVICES is ${ASCEND_RT_VISIBLE_DEVICES}"
 
 stage=4 # start from 0 if you need to start from data preparation

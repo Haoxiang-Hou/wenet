@@ -46,3 +46,4 @@ runtime/core/grpc/wenet.pb.h
 # Clangd files
 .cache
 compile_commands.json
+examples/aishell/s0/kernel_meta

@@ -29,7 +29,8 @@ import torchaudio.compliance.kaldi as kaldi
 import torch.nn.functional as F
 from wenet.text.base_tokenizer import BaseTokenizer
 
-torchaudio.utils.sox_utils.set_buffer_size(16500)
+torchaudio.set_audio_backend('soundfile')
+# torchaudio.utils.sox_utils.set_buffer_size(16500)
 
 AUDIO_FORMAT_SETS = set(['flac', 'mp3', 'm4a', 'ogg', 'opus', 'wav', 'wma'])
 
@@ -211,7 +212,8 @@ def speed_perturb(sample, speeds=None):
             key, wav, label, sample_rate}
     """
     if speeds is None:
-        speeds = [0.9, 1.0, 1.1]
+        speeds = [1.0]
+        # speeds = [0.9, 1.0, 1.1]
     assert 'sample_rate' in sample
     assert 'wav' in sample
     sample_rate = sample['sample_rate']
