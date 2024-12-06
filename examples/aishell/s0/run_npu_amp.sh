@@ -4,13 +4,15 @@
 . ./path.sh || exit 1;
 
 # Automatically detect number of npus
-if command -v npu-smi info &> /dev/null; then
-  num_npus=$(npu-smi info -l | grep "Total Count" | awk '{print $4}')
-  npu_list=$(seq -s, 0 $((num_npus-1)))
-else
-  num_npus=-1
-  npu_list="-1"
-fi
+# if command -v npu-smi info &> /dev/null; then
+#   num_npus=$(npu-smi info -l | grep "Total Count" | awk '{print $4}')
+#   npu_list=$(seq -s, 0 $((num_npus-1)))
+# else
+#   num_npus=-1
+#   npu_list="-1"
+# fi
+num_npus=4
+npu_list="4,5,6,7"
 
 # You can also manually specify ASCEND_RT_VISIBLE_DEVICES
 # if you don't want to utilize all available NPU resources.
@@ -51,23 +53,24 @@ train_set=train
 # 7. conf/train_u2++_conformer.yaml: U2++ lite conformer, must load a well
 #    trained model, and freeze encoder module, otherwise there will be a
 #    autograd error
-train_config=conf/train_conformer_huawei.yaml
+train_config=conf/train_conformer_huawei_amp.yaml
+# conf/train_conformer_huawei.yaml
 # conf/train_conformer.yaml
-dir=exp/conformer_huawei
+dir=exp/conformer_huawei_amp
 tensorboard_dir=tensorboard
-last_epoch=$(ls $dir/epoch_*.pt -t | head -n 1)
-checkpoint=$last_epoch
+checkpoint=
 num_workers=8
 prefetch=10
 
 # use average_checkpoint will get better result
-average_checkpoint=true
-decode_checkpoint=$last_epoch #$dir/final.pt
+average_checkpoint=false #true
+decode_checkpoint=$dir/epoch_133.pt #$dir/final.pt
 average_num=30
 decode_modes="ctc_greedy_search ctc_prefix_beam_search attention attention_rescoring"
 
 # specify your distributed training method among ['torch_ddp', 'torch_fsdp', 'deepspeed']
 train_engine=torch_fsdp
+use_amp=true
 
 deepspeed_config=conf/ds_stage2.json
 deepspeed_save_states="model_only"
@@ -155,6 +158,7 @@ if [ ${stage} -le 4 ] && [ ${stop_stage} -ge 4 ]; then
            --rdzv_id=$job_id --rdzv_backend="c10d" --rdzv_endpoint=$HOST_NODE_ADDR \
     wenet/bin/train.py \
       --device "npu" \
+      ${use_amp:+--use_amp} \
       --train_engine ${train_engine} \
       --config $train_config \
       --data_type  $data_type \
