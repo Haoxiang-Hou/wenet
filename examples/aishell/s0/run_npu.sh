@@ -51,16 +51,17 @@ train_set=train
 # 7. conf/train_u2++_conformer.yaml: U2++ lite conformer, must load a well
 #    trained model, and freeze encoder module, otherwise there will be a
 #    autograd error
-train_config=conf/train_conformer.yaml
-dir=exp/conformer
+train_config=conf/train_conformer_huawei.yaml
+# conf/train_conformer.yaml
+dir=exp/conformer_huawei
 tensorboard_dir=tensorboard
 checkpoint=
 num_workers=8
 prefetch=10
 
 # use average_checkpoint will get better result
-average_checkpoint=true
-decode_checkpoint=$dir/final.pt
+average_checkpoint=false #true
+decode_checkpoint=$dir/epoch_133.pt #$dir/final.pt
 average_num=30
 decode_modes="ctc_greedy_search ctc_prefix_beam_search attention attention_rescoring"
 
